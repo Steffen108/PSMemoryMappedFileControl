@@ -11,14 +11,16 @@
 
     try {
         # Define variables with initial values
+        [System.Object]$mmf        = $null
+        [System.Object]$accessor   = $null
         [System.Text.Encoding]$enc = [System.Text.Encoding]::UTF8
         [System.IntPtr]$handle     = [System.IntPtr]::Zero
         [System.String]$result     = [System.String]::Empty
         [System.String]$MapName    = "$($Scope)\$($Name)"
         
         # Add type for reading existing MemoryMappedFiles
-        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ValueOnly -ErrorAction Ignore)) {
-            $Global:MMFHelper = Add-Type -PassThru -TypeDefinition @"
+        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ErrorAction Ignore)) {
+            [System.Object]$Global:MMFHelper = Add-Type -PassThru -TypeDefinition @"
                 using System;
                 using System.Runtime.InteropServices;
                 public class MMFHelper {
@@ -41,7 +43,7 @@
 
         # Load MemoryMappedFile if already existing
         if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "MMF map name: $MapName"}
-        [System.IntPtr]$handle = [MMFHelper]::OpenFileMapping([MMFHelper]::FILE_MAP_READ, $false, $MapName)
+        $handle = [MMFHelper]::OpenFileMapping([MMFHelper]::FILE_MAP_READ, $false, $MapName)
         if ($handle -ne [System.IntPtr]::Zero) {
             if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "MMF handle: $handle"}
             
@@ -74,11 +76,11 @@
             if ($null -ne $accessor) {$accessor.Dispose()}
             if ($null -ne $mmf)      {$mmf.Dispose()}
             if ($handle -ne [IntPtr]::Zero) {[System.Boolean]$cHResult = [MMFHelper]::CloseHandle($handle); $handle = [IntPtr]::Zero}
-            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "CloseHandle result: $cHResult"}
             [System.GC]::Collect()
+            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "CloseHandle result: $cHResult"}
 
-            # Create result value
-            [System.Int64]$nullIndex  = 0
+            # Create result value (removing null and trim the value)
+            [System.Int64]$nullIndex = 0
             $nullIndex = [System.Array]::IndexOf($buffer, [byte]0)
             if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Null index: $nullIndex"}
             if ($nullIndex -ge 0) {$result = $enc.GetString($buffer, 0, $nullIndex)}

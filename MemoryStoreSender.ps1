@@ -5,23 +5,25 @@
         [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()]
         [System.String]$Name,
         [ValidateSet('Local','Global')]
-        [System.String]$Scope                  = 'Local',  # Local or Global (Global requires admin privileges)
-        [System.Int64]$Size                    = 5120,     # 5120 = 5 KB = max. 2560 Characters (UTF8 without Symbols or Emojis)
-        [System.Int32]$TimeoutInSeconds        = 30,
-        [System.Int32]$WritingPauseInSeconds   = 3,
+        [System.String]$Scope                = 'Local',  # Local or Global (Global requires admin privileges)
+        [System.Int64]$Size                  = 5120,     # 5120 = 5 KB = max. 2560 Characters (UTF8 without Symbols or Emojis)
+        [System.Int32]$TimeoutInSeconds      = 30,
+        [System.Int32]$WritingPauseInSeconds = 3,
         [System.Management.Automation.SwitchParameter]$WriteHost,
         [System.Management.Automation.SwitchParameter]$WriteHostResultsOnly
     )
-    
+
     try {
         # Define variables with initial values
+        [System.Object]$mmf        = $null
+        [System.Object]$accessor   = $null
         [System.Text.Encoding]$enc = [System.Text.Encoding]::UTF8
         [System.IntPtr]$handle     = [System.IntPtr]::Zero
         [System.String]$MapName    = "$($Scope)\$($Name)"
 
         # Add type for reading existing MemoryMappedFiles
-        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ValueOnly -ErrorAction Ignore)) {
-            $Global:MMFHelper = Add-Type -PassThru -TypeDefinition @"
+        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ErrorAction Ignore)) {
+            [System.Object]$Global:MMFHelper = Add-Type -PassThru -TypeDefinition @"
                 using System;
                 using System.Runtime.InteropServices;
                 public class MMFHelper {
@@ -42,7 +44,7 @@
         # Checks
             # Admin permissions required
             if ($Scope -eq 'Global') {
-                $isAdmin = ([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+                [System.Boolean]$isAdmin = ([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
                 if (-not $isAdmin) {throw 'Admin permissions required to start MemoryMappedFile with scope Global!'}
             }
 
@@ -73,12 +75,12 @@
             if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Creating new MMf..."}
             
             # Set security definitions for MemoryMappedFile access
-            $security = [System.IO.MemoryMappedFiles.MemoryMappedFileSecurity]::new()
+            [System.IO.MemoryMappedFiles.MemoryMappedFileSecurity]$security = [System.IO.MemoryMappedFiles.MemoryMappedFileSecurity]::new()
             $security.SetAccessRuleProtection($true, $false)
 
                 # Everyone (Read)
-                $everyone = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::WorldSid, $null)
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.Principal.SecurityIdentifier]$everyone = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::WorldSid, $null)
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $everyone, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::Read, 
                     [System.Security.AccessControl.AccessControlType]::Allow
@@ -86,14 +88,14 @@
                 $security.AddAccessRule($rule)
 
                 # Administrators (FullControl and TakeOwnership)
-                $admins   = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.Principal.SecurityIdentifier]$admins   = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $admins, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::FullControl, 
                     [System.Security.AccessControl.AccessControlType]::Allow
                 )
                 $security.AddAccessRule($rule)
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $admins, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::TakeOwnership, 
                     [System.Security.AccessControl.AccessControlType]::Allow
@@ -101,14 +103,14 @@
                 $security.AddAccessRule($rule)
 
                 # System user (FullControl and TakeOwnership)
-                $system   = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.Principal.SecurityIdentifier]$system   = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $system, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::FullControl, 
                     [System.Security.AccessControl.AccessControlType]::Allow
                 )
                 $security.AddAccessRule($rule)
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $system, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::TakeOwnership, 
                     [System.Security.AccessControl.AccessControlType]::Allow
@@ -116,14 +118,14 @@
                 $security.AddAccessRule($rule)
 
                 # Current user (FullControl and TakeOwnership and SetOwner)
-                $cuser    = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.Principal.SecurityIdentifier]$cuser    = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $cuser, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::FullControl, 
                     [System.Security.AccessControl.AccessControlType]::Allow
                 )
                 $security.AddAccessRule($rule)
-                $rule     = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
+                [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]$rule = [System.Security.AccessControl.AccessRule[System.IO.MemoryMappedFiles.MemoryMappedFileRights]]::new(
                     $cuser, 
                     [System.IO.MemoryMappedFiles.MemoryMappedFileRights]::TakeOwnership, 
                     [System.Security.AccessControl.AccessControlType]::Allow
@@ -147,44 +149,54 @@
         if ($WriteHost -and -not $WriteHostResultsOnly) {
             Write-Host (
                 "Accessor stats: " + `
-                "CanRead = $($accessor.CanRead) | CanWrite = $($accessor.CanWrite) | " + `
-                "Capacity = $($accessor.Capacity) | PointerOffset = $($accessor.PointerOffset)"
+                "CanRead=$($accessor.CanRead) | CanWrite=$($accessor.CanWrite) | " + `
+                "Capacity=$($accessor.Capacity) | PointerOffset=$($accessor.PointerOffset)"
             )
         }
 
-        # Run loop for memory space writing
-        [System.Int64] $i          = 0
-        [System.Int64] $valLength  = 0
-        [System.String]$fillVal    = [System.Char][System.Byte]0
-        [System.String]$val        = [System.String]::Empty
-        [System.Byte[]]$buffer     = [System.Byte[]]::new($Size)
-        while ($true) {
-            # Check for timeout
-            if ($TimeoutInSeconds -gt 0) {if ($i -ge $TimeoutInSeconds) {break}}
+        # Write to memory
+            # Define variables
+            [System.String]$fillVal    = [System.Char][System.Byte]0
+            [System.Byte[]]$buffer     = [System.Byte[]]::new($Size)
+            [System.Int64] $i          = 0
+            [System.Int64] $valLength  = 0
+            [System.Int64] $bytes      = 0
+            [System.String]$val        = [System.String]::Empty
+            
+            # Overwrite last memory space with null
+            $accessor.WriteArray(0, $buffer, 0, $buffer.Length)
 
-            # Check for value
-            if ($Data.Value -eq 'StopMmfWriting') {break}
+            # Run loop for memory space writing
+            while ($true) {
+                # Check for timeout
+                if ($TimeoutInSeconds -gt 0) {if ($i -ge $TimeoutInSeconds) {break}}
 
-            # Add timestamp to value
-            $val = "$(Get-Date -Format 'HH:mm:ss'); $($Data.Value)"
+                # Check for value
+                if ($Data.Value -eq 'StopMmfWriting') {break}
 
-            # Prepare data
-            if ($val.Length -lt $valLength) {$val = "$($val)$($fillVal*($valLength - $val.Length))"}; $valLength = $val.Length
-            $bytes = $enc.GetBytes($val, 0, $val.Length, $buffer, 0)
-            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Content size: $($buffer.Count)"}
+                # Add timestamp to value
+                $val = "$(Get-Date -Format 'HH:mm:ss'); $($Data.Value)"
 
-            # Write data to memory space
-            $accessor.WriteArray(0, $buffer, 0, $bytes)
+                # Set value to overwrite characters of a longer last value in the memory with null characters
+                if ($val.Length -lt $valLength) {$val = "$($val)$($fillVal*($valLength - $val.Length))"}
+                $valLength = $val.Length
 
-            # Finish loop step
-            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "String length: $($valLength)"}
-            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Content: $val"}
-            if ($WriteHost -and $WriteHostResultsOnly -and -not ([System.String]::IsNullOrWhiteSpace($val))) {Write-Host $val}
-            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Timeout: $(if ($TimeoutInSeconds -gt 0) {"$($i)/$($TimeoutInSeconds) seconds"} else {"None"})"}
-            if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Waiting $($WritingPauseInSeconds) seconds for next content update..."}
-            Start-Sleep -Seconds $(if ($WritingPauseInSeconds -gt 0) {$WritingPauseInSeconds} else {1})
-            $i = $i + $WritingPauseInSeconds
-        }
+                # Prepare data
+                $bytes = $enc.GetBytes($val, 0, $val.Length, $buffer, 0)
+                if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Content size: $($buffer.Count)"}
+
+                # Write data to memory space
+                $accessor.WriteArray(0, $buffer, 0, $bytes)
+
+                # Finish loop step
+                if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "String length: $($valLength)"}
+                if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Content: $val"}
+                if ($WriteHost -and $WriteHostResultsOnly -and -not ([System.String]::IsNullOrWhiteSpace($val))) {Write-Host $val}
+                if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Timeout: $(if ($TimeoutInSeconds -gt 0) {"$($i)/$($TimeoutInSeconds) seconds"} else {"None"})"}
+                if ($WriteHost -and -not $WriteHostResultsOnly) {Write-Host "Waiting $($WritingPauseInSeconds) seconds for next content update..."}
+                $i = $i + $WritingPauseInSeconds
+                Start-Sleep -Seconds $(if ($WritingPauseInSeconds -gt 0) {$WritingPauseInSeconds} else {1})
+            }
     }
     catch {
         # Error handling
